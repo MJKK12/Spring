@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+ <beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:tx="http://www.springframework.org/schema/tx"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd"> 
+	
+	<!-- Root Context: defines shared resources visible to all other web components -->
+
+	<!-- ==== #15. myBatis(JDBC)설정 연결문자열 설정하기  ==== -->
+	<!-- dataSource 설정, spring-jdbc 모듈 사용, spring 에서 jdbc 를 통해 mysql 에 접속할 수 있게 함 -->
+    <bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
+        <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"></property>
+        <property name="url" value="jdbc:mysql://database-shfkddml.cd8ozsvbgvyc.ap-northeast-2.rds.amazonaws.com:3306/was_db?serverTimezone=Asia/Seoul"></property>
+        <property name="username" value="admin"></property>
+        <property name="password" value="java1234"></property>
+    </bean>
+    
+    <!-- ==== #15. myBatis(JDBC)설정 mapper 파일 위치 지정하기  ==== -->
+    <!-- mybatis 설정, mybatis-spring 모듈 사용  -->
+	<!-- mapper 파일이란 sql 문을 가지고 있는 xml 파일을 말한다. -->
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<!-- mybatis 용 config 파일을 로드하도록 설정 
+        <property name="configLocation" value="classpath:/mybatis-config.xml" />
+        -->
+		<property name="mapperLocations" value="classpath*:com/spring/favorite/mapper/*.xml" />
+		<property name="dataSource" ref="dataSource"/>
+	</bean>
+			
+	<!-- ==== #15. myBatis(JDBC)설정 sqlSessionTemplate 의존 객체 설정 ==== -->
+	<bean id="sqlsession" class="org.mybatis.spring.SqlSessionTemplate"> 
+		<constructor-arg index="0" ref="sqlSessionFactory" />
+	</bean>	
+		
+</beans>

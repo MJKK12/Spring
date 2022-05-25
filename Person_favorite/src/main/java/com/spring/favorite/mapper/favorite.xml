@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ==== #29. mapper 기본설정 ==== -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- ==== #29. 루트 엘리먼트 & 네임스페이스 설정(프로젝트 전체내에서 유일해야 한다.) ==== -->
+<mapper namespace="favorite">
+
+	<insert id="personFavoriteRegister" parameterType="com.spring.favorite.model.PersonFavoriteVO">
+		insert into tbl_person_interest(name, school, color, food)
+		values(#{name}, #{school}, #{color}, #{food}) 
+	</insert>	
+	
+	<select id="personFavoriteSelectAll" resultType="com.spring.favorite.model.PersonFavoriteVO">
+		select seq, name, school, color, food, registerday 
+		from tbl_person_interest 
+		order by seq desc
+	</select>
+	
+	<select id="personFavoriteDetail" parameterType="String" resultType="com.spring.favorite.model.PersonFavoriteVO">
+		select seq, name, school, color, food, registerday 
+		from tbl_person_interest 
+		where seq = #{seq}
+	</select>
+	
+	<delete id="personFavoriteDelete" parameterType="String" >
+		delete from tbl_person_interest
+		where seq = #{seq} 
+	</delete>
+	
+	<update id="personFavoriteUpdateEnd" parameterType="com.spring.favorite.model.PersonFavoriteVO">
+		update tbl_person_interest set name = #{name}
+		                             , school = #{school}
+		                             , color = #{color}
+		                             , food = #{food}
+		where seq = #{seq} 
+	</update>
+
+</mapper>
+
+
+
