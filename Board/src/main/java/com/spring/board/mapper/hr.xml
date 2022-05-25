@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ==== mapper 기본설정 ==== -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- ==== 루트 엘리먼트 & 네임스페이스 설정(프로젝트 전체내에서 유일해야 한다.) ==== -->
+<mapper namespace="hr">
+
+	<!-- === employees 테이블에서 근무중인 사원들의 부서번호 가져오기 -->
+	<select id="deptIdList" resultType="String">
+		select distinct nvl(department_id, -9999) as department_id
+		from employees
+		order by department_id asc	
+	</select>
+
+	<!-- id 와 resultMap 을 매치시켜야 아래의 select 된 것이 resultMap 에 들어온다. 
+		 property 는 컬럼에 대한 hashmap 의 key 값, column 은 아래의 select 문의 column 들이다. 
+		 column 은 아래의 선택된 8개 컬럼들이므로 8개를 그대로 붙여넣는다.
+		 javaType 은 java 에서 설정된 타입을 말한다. key는 모두 "" 로 String 타입이고, javaType 도 String 타입	-->
+	<resultMap type="HashMap" id="empDeptMap">
+		<result property="department_id" 	column="department_id" 		javaType="String" />
+		<result property="department_name" 	column="department_name" 	javaType="String" />
+		<result property="employee_id" 		column="employee_id" 		javaType="String" />
+		<result property="fullname" 		column="fullname" 			javaType="String" />
+		<result property="hire_date" 		column="hire_date" 			javaType="String" />
+		<result property="monthsal" 		column="monthsal" 			javaType="String" />
+		<result property="gender" 			column="gender" 			javaType="String" />
+		<result property="age" 				column="age" 				javaType="String" />
+	</resultMap>
+
+	<!-- employess 테이블에서 조건에 만족하는 사원들을 조회한다.(가져오기) -->
+	<!-- paraMap 에서 꺼내온다. -->
+	<!-- resultType 주의. return 타입이 VO 가 아니라 hashmap 타입일 때, resultType 이 아니라, resultMap 이다. -->
+	<select id="empList" parameterType="HashMap" resultMap="empDeptMap">
+		select E.department_id, D.department_name, E.employee_id, 
+		       E.first_name || ' ' || E.last_name AS fullname,
+		       to_char(E.hire_date, 'yyyy-mm-dd') AS hire_date,
+		       nvl(E.salary + E.salary*E.commission_pct, E.salary) AS monthsal,
+		       func_gender(E.jubun) AS gender,
+		       func_age(E.jubun) AS age 
+		from employees E left join departments D
+		on E.department_id = D.department_id
+		<!-- 부서번호도 선택하고 성별도 선택했을 경우, where 절이 2번 나올 수 없음. 따라서 where 1=1을 덧붙인다. 그 이후 and 로 연결되어야 한다. -->
+		where 1=1
+		<!-- 사용자가 선택한 부서번호가 존재해야 한다. -->
+		<if test="arr_DeptId != null">
+			and nvl(E.department_id,-9999) in	<!-- in 다음 forEach 문을 돌린다. -->
+			<foreach collection="arr_DeptId" index="i" open="(" separator="," close= ")">		<!-- collection 안에는 배열 또는 list를 넣는다. (주로 배열) close 뒤에 부서번호 값이 하나하나 들어와야 한다 (,가 구분자) -->
+				'${arr_DeptId[i]}'		<!-- 부서번호가 '-9999' '10' 이런식으로 들어와야 하기 때문에 '' 를 붙인다. -->
+			</foreach>
+		</if>
+		
+		<if test="gender != null"> <!-- 성별을 선택하지 않았을 때 아예 Controller 에서 Map 에 담지 않는다. -->
+			and func_gender(E.jubun) = #{gender}
+		</if>	
+		order by E.department_id, E.employee_id	
+	</select>
+	
+	
+	<!-- employees 테이블에서 부서명별 인원수 및 퍼센티지 가져오기 -->
+	<resultMap type="HashMap" id="employeeCntByDeptname_Map">
+		<result property="department_name" 	column="department_name" 	javaType="String"/>
+		<result property="cnt" 				column="cnt" 				javaType="String"/>
+		<result property="percentage" 		column="percentage" 		javaType="String"/>
+	</resultMap>
+	
+	<select id="employeeCntByDeptname" resultMap="employeeCntByDeptname_Map">
+		select nvl(D.department_name,'부서없음') as department_name
+	     , count(*) AS cnt
+	     , round( count(*)/(select count(*) from employees) * 100, 2 ) AS percentage
+		from employees E left join departments D
+		on E.department_id = D.department_id
+		group by D.department_name
+		order by cnt desc, department_name asc
+	</select>
+
+	<!-- employees 테이블에서 성별 인원수 및 퍼센티지 가져오기 -->
+	<resultMap type="HashMap" id="employeeCntByGender_Map">
+		<result property="gender" 			column="gender" 	javaType="String"/>
+		<result property="cnt" 				column="cnt" 		javaType="String"/>
+		<result property="percentage" 		column="percentage" javaType="String"/>
+	</resultMap>
+	
+	<select id="employeeCntByGender" resultMap="employeeCntByGender_Map">
+		SELECT gender 
+			 , COUNT(*) AS cnt
+			 , round( count(*)/(select count(*) from employees) * 100, 2 ) AS percentage
+		FROM
+		(
+		SELECT CASE WHEN substr(jubun,7,1) IN ('1','3') THEN '남' ELSE '여' END AS gender
+		FROM employees
+		) V
+		GROUP BY gender
+		order by cnt desc
+	</select>
+
+	<!-- === 차트 그리기(Ajax) 특정 부서명에 근무하는 직원들의 성별 인원수 및 퍼센티지 가져오기 === -->
+	<!-- return 타입은 Map 이므로 resultMap 을 사용한다. -->
+	<!-- 위의 [employees 테이블에서 성별 인원수 및 퍼센티지 가져오기] 에서 resultMap 그대로 활용하기 -->
+	<!-- 중복으로 resultMap 또 만들 필요 x -->
+	<select id="genderCntSpecialDeptname" parameterType="HashMap" resultMap="employeeCntByGender_Map">
+		select func_gender(jubun) as gender
+		     , count(*) as cnt
+		     , round(count(*)/(select count(*) from employees)*100, 2) as percentage
+		from employees E left join departments D
+		on E.department_id = D.department_id
+		<if test="depthname != '부서없음'">
+		where D.department_name = #{depthname}
+		</if>
+		<if test="depthname == '부서없음'">
+		where D.department_name is null
+		</if>
+		group by func_gender(jubun)
+		order by gender		
+	</select>
+
+</mapper>

@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ==== #29. mapper 기본설정 ==== -->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- ==== #29. 루트 엘리먼트 & 네임스페이스 설정(프로젝트 전체내에서 유일해야 한다.) ==== -->
+<mapper namespace="board">
+
+<!-- DAO 에서 불러와야 한다. -->
+	<insert id="test_insert">
+		insert into spring_test(no, name, writeday) 
+		values(101,'차은우', default)			<!-- 세미콜론(;) 을 쓰지 않는다. -->
+	</insert>
+
+
+	<!--  !!!! 주의해야할 사항은 리턴타입이 List<E> 이더라도 resultType 은 E 으로 해야만 한다. !!!! -->	
+	<!-- select 된 값이 없으면 null 값을 넘겨준다. -->
+	<select id="test_select" resultType="com.spring.board.model.TestVO">	<!-- DAO 에서 어떤 타입으로 받아오는지 알아오자. -->
+		select no, name, to_char(writeday,'yyyy-mm-dd hh24:mi:ss') AS writeday
+		from spring_test
+		order by writeday desc	
+	</select>
+
+	<!-- #### 중요 #### 
+       HashMap 타입으로 매개변수를 받아온 것을 꺼내서 사용할때 
+       1. 데이터로 사용할때는 #{key명} 이고,
+       2. 식별자(테이블명, 컬럼명)로 사용할때는 ${key명} 이고,
+       3. myBatis 에서 제공하는 if 엘리먼트나 choose 엘리먼트 안에서 사용할때는 
+             그냥 <if test="key명"> <when test="key명"> 으로 사용한다. 
+    -->
+	
+	<!-- no, name 은 form 에 들어가있는 것이다. Mapper 에서 받아온다. -->
+	<!-- parameterMap 은 select 이다. -->
+	<!-- 원래는 패키지명을 다 써서 받아와야 하는데, HashMap 은 패키지명을 빼고 써도 된다. (dao 의 paraMap 을 받아온 것.) -->
+	<insert id="test_insert_map" parameterType="HashMap">
+		insert into spring_test(no, name, writeday) 
+		values(#{no}, #{irum}, default)			<!-- 세미콜론(;) 을 쓰지 않는다. -->	
+	</insert>
+
+	<!-- === 파라미터로 VO가 들어오면 입력해줄때 값은 #{get다음에나오는 메소드명인데 첫글자는 반드시 소문자} 으로 해준다. -->
+	<insert id="test_insert_vo" parameterType="com.spring.board.model.TestVO">
+		insert into spring_test(no, name, writeday) 
+		values(#{no}, #{irum}, default)			<!-- 세미콜론(;) 을 쓰지 않는다. -->	
+		<!-- VO 에서 getXXX 로 되어있는 것에서 꺼내오도록 한다. -->	
+	</insert>
+
+
+
+
+	<!-- ==================================================================== -->	
+	<!-- 게시판 만들기 -->
+	
+	<!-- #39. 시작페이지에서 메인이미지를 보여주는 것 (캐러셀) -->
+
+	<select id="getImgfilenameList" resultType="String">	<!-- List<String> 이므로 resultType = "String" -->
+		select imgfilename
+		from TBL_MAIN_IMAGE
+		order by imgno desc
+	</select>
+	
+	<!-- #47번 자리 -->
+	 	
+	<!-- <select id="getLoginMember" resultType="com.spring.board.model.MemberVO" parameterType="HashMap"> -->	<!-- type 이 MemberVO -->
+		<!-- 파라미터에 paraMap 이 들어있으므로 parameterType="HashMap" -->
+	<!-- #47. 로그인 처리하기 
+		SELECT userid, name, email, mobile, postcode, address, detailaddress, extraaddress, gender  
+	    	, birthyyyy, birthmm, birthdd, coin, point, registerday, pwdchangegap  
+	    	, nvl(lastlogingap, trunc( months_between(sysdate, registerday) ) ) AS lastlogingap 
+		FROM 
+		 ( 
+		  select userid, name, email, mobile, postcode, address, detailaddress, extraaddress, gender 
+		        , substr(birthday,1,4) AS birthyyyy, substr(birthday,6,2) AS birthmm, substr(birthday,9) AS birthdd  
+		        , coin, point, to_char(registerday, 'yyyy-mm-dd') AS registerday 
+		        , trunc( months_between(sysdate, lastpwdchangedate) ) AS pwdchangegap 
+		  from tbl_member 
+		  where status = 1 and userid = #{userid} and pwd = #{pwd}
+		 ) M 
+		CROSS JOIN 
+		(
+		 select trunc( months_between(sysdate, max(logindate)) ) AS lastlogingap
+		 from tbl_loginhistory
+		 where fk_userid = #{userid}
+		) H
+	</select>
+	<update id="updateIdle" parameterType="String">	
+		update tbl_member set idle = 1
+		where userid = #{userid}
+	</update>
+	 !-->
+	 
+	 
+	 <!-- === #139. 로그인 처리하기 === 
+              먼저, 위의 #47 을 주석처리 하고서 아래처럼 한다. -->
+     <!-- 로그인한 사람의 gradelevel 이 몇인지 알아야 한다. (관리자인지 일반사용자인지 구분), gradelevel 이 10 인 사람만 답변 글쓰기 가능 -->         
+   <select id="getLoginMember" resultType="com.spring.board.model.MemberVO" parameterType="HashMap">     
+      select userid, name, email, mobile, postcode, address, detailaddress, extraaddress, gender
+           , birthyyyy, birthmm, birthdd, coin, point, registerday, pwdchangegap
+           , nvl( lastlogingap, trunc( months_between(sysdate, registerday) )) as lastlogingap
+           , gradelevel 
+      from
+      (
+      select userid, name, email, mobile, postcode, address, detailaddress, extraaddress, gender
+           , substr(birthday,1,4) as birthyyyy, substr(birthday,6,2) as birthmm, substr(birthday,9) as birthdd
+           , coin, point, to_char(registerday,'yyyy-mm-dd') as registerday
+           , trunc( months_between(sysdate, lastpwdchangedate) ) as pwdchangegap
+           , gradelevel 
+      from tbl_member
+      where status = 1 and userid = #{userid} and pwd = #{pwd} 
+      ) M 
+      cross join 
+      (
+      select trunc( months_between(sysdate, max(logindate)) ) as lastlogingap 
+      from tbl_loginhistory 
+      where fk_userid = #{userid} 
+      ) H
+   </select>
+   <update id="updateIdle" parameterType="String">
+      update tbl_member set idle = 1
+      where userid = #{userid}
+   </update>
+	 
+	<!-- ==== #57. 글쓰기(파일 첨부가 없는 글쓰기) ==== -->
+	<!-- #{} 안에는 VO 에서 가져온 getXXX 이다. -->	
+	<!-- 	
+	<insert id="add" parameterType="com.spring.board.model.BoardVO">
+		insert into tbl_board(seq, fk_userid, name, subject, content, pw, readCount, regDate, status)
+		values(boardSeq.nextval, #{fk_userid}, #{name}, #{subject}, #{content}, #{pw}, default, default, default)
+	</insert> 
+	-->
+	 
+	<!-- ==== #147. 원글쓰기 또는 답변글쓰기(파일 첨부가 없는 글쓰기) ==== 
+			   먼저 #57 을 주석처리한 후 아래처럼 해야 한다. -->
+	<!-- #{} 안에는 VO 에서 가져온 getXXX 이다. -->
+	<!-- test 안에는 VO에서 가져온 getXXX 이다. (service) 참고 -->
+	<!-- fk_seq.equals("") / 'fk_seq == "" ' 도 가능하다. -->
+	<!-- fk_seq.equals("") 일때 원글쓰기, fk_seq.equals("") 아닐때 답변글쓰기 -->
+	<insert id="add" parameterType="com.spring.board.model.BoardVO">
+		<if test='fk_seq.equals("")'>
+			insert into tbl_board(seq, fk_userid, name, subject, content, pw, readCount, regDate, status, groupno, fk_seq, depthno)
+			values(boardSeq.nextval, #{fk_userid}, #{name}, #{subject}, #{content}, #{pw}, default, default, default, #{groupno}, default, default)
+		</if>
+		
+		<if test='!fk_seq.equals("")'>
+			insert into tbl_board(seq, fk_userid, name, subject, content, pw, readCount, regDate, status, groupno, fk_seq, depthno)
+			values(boardSeq.nextval, #{fk_userid}, #{name}, #{subject}, #{content}, #{pw}, default, default, default, #{groupno}, #{fk_seq}, #{depthno}+1)
+		</if>
+	</insert>
+	
+
+	
+	<!-- === #61. 페이징 처리를 안한 검색어가 없는 전체 글목록 보여주기 === -->
+	<!-- 
+	<select id="boardListNoSearch" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject  
+     		 , readCount, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+		from tbl_board
+		where status = 1
+		order by seq desc
+	</select> 
+	-->
+	
+	<!-- 먼저 #61 을 주석처리 한 후, 아래의 작업을 한다. -->
+	<!-- === #95. 페이징 처리를 안한 검색어가 없는 전체 글목록 보여주기 ===
+		 		    전체 글목록을 보여줄 때 달린 댓글의 개수도 보여주도록 한다. -->
+	<select id="boardListNoSearch" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject  
+     		 , readCount, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+     		 , commentCount
+		from tbl_board
+		where status = 1
+		order by seq desc
+	</select>
+	
+
+	<!-- ** 글 1개 조회하기와 글 조회수 1 증가하기는 한 세트이다. ** -->
+	<!-- #{} 내에는 Controller 에서 가져온 HashMap의 key 값을 가져온다. paraMap.put(K,V) 로 담은것을 가져온다. -->
+	<!-- 이전글 및 다음글까지 view 단에 나타낼 수 있도록 한다. -->
+	<!-- 이전글, 다음글 역시 검색이 있을때와 없을때로 나뉜다. 검색이 있을때는 해당 검색에 따른 이전글, 다음글만 보여준다. -->
+	<!-- and 또는 && or 또는 || 도 가능하다. -->
+	<!-- #66. 글 1개 조회하기 -->	 
+	<!--
+ 	<select id="getView" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">	
+		select previousseq, previoussubject
+			  , seq, fk_userid, name, subject, content, readCount, regDate, pw
+			  , nextseq, nextsubject
+				from
+				(
+				    select lag(seq,1) over(order by seq desc) AS previousseq            
+				         , lag(subject,1) over(order by seq desc) AS previoussubject                                         
+				         , seq, fk_userid, name, subject, content, readCount
+				         , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+				         , pw
+				         , lead(seq,1) over(order by seq desc) AS nextseq
+				         , lead(subject,1) over(order by seq desc)AS nextsubject
+				    from tbl_board
+				    where status = 1
+					<if test='searchType != "" and searchWord != "" '>
+					and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+					</if>	    
+				) V
+		where V.seq = #{seq}
+	</select> 
+	-->
+
+
+	<!-- #140. (댓글 및 답변글쓰기 게시판에서) 글 1개 조회하기 
+		먼저 위의 넘버링 #66 을 주석처리 한 다음에 아래와 같이 한다.
+	-->
+	<!-- 
+	<select id="getView" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">	
+		select previousseq, previoussubject
+			  , seq, fk_userid, name, subject, content, readCount, regDate, pw
+			  , nextseq, nextsubject
+			  , groupno, fk_seq, depthno
+				from
+				(
+				    select lag(seq,1) over(order by seq desc) AS previousseq            
+				         , lag(subject,1) over(order by seq desc) AS previoussubject                                         
+				         , seq, fk_userid, name, subject, content, readCount
+				         , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+				         , pw
+				         , lead(seq,1) over(order by seq desc) AS nextseq
+				         , lead(subject,1) over(order by seq desc)AS nextsubject
+				         
+				         , groupno, fk_seq, depthno
+				    from tbl_board
+				    where status = 1
+					<if test='searchType != "" and searchWord != "" '>
+					and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+					</if>	    
+				) V
+		where V.seq = #{seq}
+	</select>
+	 -->
+	
+	<!-- #161. (댓글 및 답변글쓰기 및 파일첨부가 있는 게시판에서) 글 1개 조회하기 
+			      먼저 위의 넘버링 #140 을 주석처리 한 다음에 아래와 같이 한다.
+	-->
+	<select id="getView" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">	
+		select previousseq, previoussubject
+			  , seq, fk_userid, name, subject, content, readCount, regDate, pw
+			  , nextseq, nextsubject
+			  , groupno, fk_seq, depthno
+			  , fileName, orgFilename, fileSize
+				from
+				(
+				    select lag(seq,1) over(order by seq desc) AS previousseq            
+				         , lag(subject,1) over(order by seq desc) AS previoussubject                                         
+				         
+				         , seq, fk_userid, name, subject, content, readCount
+				         , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+				         , pw
+				         
+				         , lead(seq,1) over(order by seq desc) AS nextseq
+				         , lead(subject,1) over(order by seq desc)AS nextsubject
+				         
+				         , groupno, fk_seq, depthno
+				         
+				         , fileName, orgFilename, fileSize
+				    from tbl_board
+				    where status = 1
+					<if test='searchType != "" and searchWord != "" '>
+					and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+					</if>	    
+				) V
+		where V.seq = #{seq}
+	</select>
+	
+	
+	<!-- #67. 글 조회수 1 증가 하기  -->
+	<!-- String 타입은 DAO 에서 넘어온 변수만 입력하면 된다. -->
+	<update id="setAddReadCount" parameterType="String">
+		update tbl_board set readCount = readCount + 1
+		where seq = #{seq}
+	</update>
+
+
+	<!-- #75. 글 1개 수정하기 -->
+	<update id="edit" parameterType="com.spring.board.model.BoardVO">
+		update tbl_board set subject = #{subject}
+		                   , content = #{content}
+		where seq = #{seq} and pw = #{pw}
+	</update>
+	
+	
+	<!-- #80. 글 1개 삭제하기 -->
+	<delete id="del" parameterType="HashMap">
+		delete from tbl_board
+		where seq = #{seq}
+	</delete>
+	
+	
+	<!-- #88. 댓글 쓰기 (tbl_comment 테이블에 insert) -->	
+	<insert id="addComment" parameterType="com.spring.board.model.CommentVO">
+		<!-- 첨부파일이 없는 경우, 초기치 null -->
+		<if test="fileName == null">
+			insert into tbl_comment(seq, fk_userid, name, content, regDate, parentSeq, status)
+			values(commentSeq.nextval, #{fk_userid}, #{name}, #{content}, default, #{parentSeq}, default)		
+		</if>
+		
+		<!-- 첨부파일이 있는 경우 (DB 에 아래와 같이 넣겠다.) -->
+		<if test="fileName != null">
+			insert into tbl_comment(seq, fk_userid, name, content, regDate, parentSeq, status, fileName, orgFilename, fileSize)
+			values(commentSeq.nextval, #{fk_userid}, #{name}, #{content}, default, #{parentSeq}, default, #{fileName}, #{orgFilename}, #{fileSize})		
+		</if>		
+	</insert>
+	
+	
+	<!--  === #89.-1  tbl_board 테이블에 commentCount 컬럼의 값을 1증가(update) === -->  
+   	<update id="updateCommentCount" parameterType="String">
+       update tbl_board set commentCount = commentCount + 1 
+       where seq = #{parentSeq}
+    </update>
+    
+    <!-- === #89.-2  tbl_member 테이블에 point 컬럼의 값을 넘어온 숫자만큼(예: 50) 증가(update) === --> 
+   	<update id="updateMemberPoint" parameterType="HashMap">
+      update tbl_member set point = point + to_number(#{point}) 
+      where userid = #{userid}
+    </update>
+
+	
+	<!-- === #93. 원게시물에 달린 댓글을 조회해오기 -->
+	<!-- 첨부파일이 없는 경우 -->
+	<select id="getCommentList" parameterType="String" resultType="com.spring.board.model.CommentVO">
+      select name, content, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') AS regDate 
+      from tbl_comment
+      where status = 1 and parentSeq = #{parentSeq}
+      order by seq desc
+	</select>
+
+	<!-- === #100. BoardAOP 클래스에서 사용하는 것으로 특정 회원에게 특정 점수만큼 포인트를 증가하기 위한 것 --> 	
+	<update id="pointPlus" parameterType="HashMap">
+	<!-- Controller 에서 가져왔다. -->
+		update tbl_member set point = point + to_number(#{point})
+		where userid = #{fk_userid}
+	</update>
+	
+	
+	<!-- #### 중요 #### 
+       HashMap 타입으로 매개변수를 받아온 것을 꺼내서 사용할때 
+       1. 데이터로 사용할때는 #{key명} 이고,
+       2. 식별자(테이블명, 컬럼명)로 사용할때는 ${key명} 이고,
+       3. myBatis 에서 제공하는 if 엘리먼트나 choose 엘리먼트 안에서 사용할때는 
+             그냥 <if test="key명"> <when test="key명"> 으로 사용한다. 
+    -->
+	<!-- == #105. 페이징 처리를 안 한 검색어가 있는 전체 글목록 보여주기  -->     
+    <select id="boardListSearch" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject  
+     		 , readCount, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+     		 , commentCount
+		from tbl_board
+		where status = 1			<!-- 검색어가 있을 때, 없을 때 -->
+		<if test='searchType != "" and searchWord != ""'>
+		and lower(${searchType}) like '%'||lower(#{searchWord})||'%'
+		</if>
+		order by seq desc			
+	</select>
+	
+	
+	<!-- == #111. 검색어 입력 시 자동글 완성하기 6 --> 
+	<!-- searchType 을 이름으로 설정했을 때 / 아닐 때 -->
+	<select id="wordSearchShow" parameterType="HashMap" resultType="String">
+		<choose>
+			<when test="searchType eq 'name'">
+				select distinct ${searchType}
+			</when> 
+			<otherwise>
+				select ${searchType}
+			</otherwise>
+		</choose>
+		from tbl_board
+		where status = 1
+		and lower(${searchType}) like '%'|| lower(#{searchWord}) ||'%'
+		<!-- select 문에서 distinct 와 order by 절을 함께 사용할때는 조심해야 한다.
+	         order by 절에는 select 문에서 사용된 컬럼만 들어올 수가 있다.
+	                  또는 order by 절을 사용하지 않아야 한다.
+	    -->	
+		<choose>
+			<when test="searchType neq 'subject'">
+				order by ${searchType} asc
+			</when> 
+			<otherwise>
+				order by seq desc
+			</otherwise>
+		</choose>
+	</select>
+
+	<!-- == # 117. 총 게시물 건수(totalCount) - 검색이 있을 때와 검색이 없을 때로 나뉜다. -->
+	<select id="getTotalCount" parameterType="HashMap" resultType="int">	
+		select count(*)
+		from tbl_board
+		where status = 1
+		<if test='searchType != ""'>
+		and lower(${searchType}) like '%' || lower(#{searchWord}) || '%'	
+		</if>
+	</select>
+	
+<!--  == # 120. 페이징 처리한 글목록 가져오기(검색이 있든지, 검색이 없든지 모두 다 포함한 것이다.) 
+			(답변형 게시판이 아닐 때)
+	<select id="boardListSearchWithPaging" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject, readCount, regDate, commentCount
+		from 
+		(
+		select row_number() over(order by seq desc) AS rno,
+		       seq, fk_userid, name, subject, readCount
+		       , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') AS regDate
+		       , commentCount
+		from tbl_board
+		where status = 1
+		<if test='searchType != "" and searchWord != ""'>
+		and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+		</if>
+		) V
+		where rno between #{startRno} and #{endRno}	
+	</select>
+ -->	
+
+<!-- 
+	 == # 148. 답변형 게시판의 페이징 처리한 글목록 가져오기(검색이 있든지, 검색이 없든지 모두 다 포함한 것이다.) 
+		 	      먼저 위의 #120 을 주석처리한 이후에 아래와 같이 한다. 
+	<select id="boardListSearchWithPaging" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject, readCount, regDate, commentCount,
+		       groupno, fk_seq, depthno     
+		from
+		(
+		    select rownum AS rno,
+		           seq, fk_userid, name, subject, readCount, regDate, commentCount
+		           , groupno, fk_seq, depthno
+		    from
+		    (
+		        select seq, fk_userid, name, subject, readCount
+		               , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') AS regDate
+		               , commentCount
+		               , groupno, fk_seq, depthno
+		        from tbl_board
+		        where status = 1
+				<if test='searchType != "" and searchWord != ""'>
+				and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+				</if>
+		        start with fk_seq = 0
+		        connect by prior seq = fk_seq
+		        order SIBLINGS by groupno desc, seq asc
+		    ) V
+		) T
+		where rno between #{startRno} and #{endRno}
+	</select>
+ -->
+
+	<!-- == # 160. 파일첨부가 있는 답변형 게시판의 페이징 처리한 글목록 가져오기(검색이 있든지, 검색이 없든지 모두 다 포함한 것이다.) 
+	 			      먼저 위의 #148 을 주석처리한 이후에 아래와 같이 한다. --> 
+	<select id="boardListSearchWithPaging" parameterType="HashMap" resultType="com.spring.board.model.BoardVO">
+		select seq, fk_userid, name, subject, readCount, regDate, commentCount,
+		       groupno, fk_seq, depthno
+		       , fileName     
+		from
+		(
+		    select rownum AS rno,
+		           seq, fk_userid, name, subject, readCount, regDate, commentCount
+		           , groupno, fk_seq, depthno
+		           , fileName
+		    from
+		    (
+		        select seq, fk_userid, name, subject, readCount
+		               , to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') AS regDate
+		               , commentCount
+		               , groupno, fk_seq, depthno
+		               , fileName
+		        from tbl_board
+		        where status = 1
+				<if test='searchType != "" and searchWord != ""'>
+				and lower(${searchType}) like '%'|| lower(#{searchWord}) || '%'
+				</if>
+		        start with fk_seq = 0
+		        connect by prior seq = fk_seq
+		        order SIBLINGS by groupno desc, seq asc
+		    ) V
+		) T
+		where rno between #{startRno} and #{endRno}
+	</select>
+		
+	
+	<!--  === #131. 원게시물(부모글)에 딸린 댓글들을 페이징 처리해서 조회해오기(Ajax 로 처리) === --> 
+	<select id="getCommentListPaging" parameterType="HashMap" resultType="com.spring.board.model.CommentVO">
+		<!-- 첨부파일이 없는 경우 -->
+		<!-- 
+			select name, content, regDate
+			from 
+			(
+			select row_number() over(order by seq desc) AS rno, name, content, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+			from tbl_comment
+			where status = 1 and parentSeq = #{parentSeq}
+			) V
+			where rno between #{startRno} and #{endRno}
+		 -->
+
+		<!-- 첨부파일이 있는 경우 -->
+			select seq, name, content, regDate
+				 , fileName, orgFilename, fileSize
+			from 
+			(
+			select row_number() over(order by seq desc) AS rno
+				 , seq, name, content, to_char(regDate, 'yyyy-mm-dd hh24:mi:ss') as regDate
+				 , nvl(fileName,' ') AS fileName
+			     , nvl(orgFilename, ' ') AS orgFilename
+			     , nvl(to_char(fileSize), ' ') AS fileSize 
+			from tbl_comment
+			where status = 1 and parentSeq = #{parentSeq}
+			) V
+			where rno between #{startRno} and #{endRno}
+	</select>
+
+	<!-- === #135. 원게시물(부모글)에 딸린 댓글의 totalPage 를 알아오기 (Ajax 로 처리) === --> 
+	<select id="getCommentTotalPage" parameterType="HashMap" resultType="int">
+		select ceil(count(*)/#{sizePerPage})
+		from tbl_comment
+		where status = 1 and parentSeq = #{parentSeq}
+	</select>
+
+	
+	<!-- === #145. tbl_board 테이블에서 groupno 컬럼의 최대값 알아오기 === -->
+	<select id="getGroupnoMax" resultType="int">
+		select nvl(max(groupno), 0)
+		from tbl_board	
+	</select>
+
+	<!-- === #159. 글쓰기(파일 첨부가 있는 글쓰기) == -->
+	<!-- insert 이므로 resultType 은 없음. -->
+	<!-- 원글쓰기 및 답변글쓰기 -->
+	<insert id="add_withFile" parameterType="com.spring.board.model.BoardVO">
+		<if test='fk_seq.equals("")'>
+			insert into tbl_board(seq, fk_userid, name, subject, content, pw, readCount, regDate, status, groupno, fk_seq, depthno, fileName, orgFilename, fileSize)
+			values(boardSeq.nextval, #{fk_userid}, #{name}, #{subject}, #{content}, #{pw}, default, default, default, #{groupno}, default, default, #{fileName}, #{orgFilename}, #{fileSize})
+		</if>
+		
+		<if test='!fk_seq.equals("")'>
+			insert into tbl_board(seq, fk_userid, name, subject, content, pw, readCount, regDate, status, groupno, fk_seq, depthno, fileName, orgFilename, fileSize))
+			values(boardSeq.nextval, #{fk_userid}, #{name}, #{subject}, #{content}, #{pw}, default, default, default, #{groupno}, #{fk_seq}, #{depthno}+1, #{fileName}, #{orgFilename}, #{fileSize})
+		</if>
+	</insert>
+
+	<!-- === #174. 댓글 1개 조회하기 (다운받기) == -->
+	<select id="getCommentOne" parameterType="String" resultType="com.spring.board.model.CommentVO">
+		select fileName, orgFilename
+		from tbl_comment
+		where seq = #{seq}
+	</select>	
+
+<!-- 
+  	==== #190. Spring Scheduler(스프링 스케줄러10) ==== 
+  	=== Spring Scheduler(스프링 스케줄러)를 사용한 email 발송하기 (특정시간에 발송) ===	   
+  	아래의 select 는 메일을 보내야 할 대상을 알아오는 것이다. email 은 암호화가 되어있기 때문에 복호화를 해주도록 한다 .
+  	resultMap 에서 property 는 대문자도 괜찮다.
+  	Cotroller 가 아니라 Service 까지 간다. (메일발송은 service 에서 처리)
+-->
+	<resultMap type="HashMap" id="getReservationListMap">
+       <result property="RESERVATIONSEQ"     column="reservationSeq"     javaType="String" />
+       <result property="USERID"          	 column="userid"           	 javaType="String" />
+       <result property="NAME"          	 column="name"               javaType="String" />
+       <result property="EMAIL"          	 column="email"           	 javaType="String" />
+       <result property="RESERVATIONDATE"    column="reservationDate"    javaType="String" />
+    </resultMap>
+
+	<select id="getReservationList" resultMap="getReservationListMap">
+		select R.reservationSeq, M.userid, M.name, M.email, 
+		       to_char(R.reservationDate,'yyyy-mm-dd hh24:mi') as reservationDate
+		from tbl_member M join tbl_reservation R
+		on M.userid = R.fk_userid
+		where R.mailSendCheck = 0
+		and to_char(reservationDate, 'yyyy-mm-dd') = to_char(sysdate+2, 'yyyy-mm-dd')	
+	</select>
+
+	<!-- 이메일을 발송한 행은 발송했다는 표시해주기 (즉, DB 에서 update 해준다.)	 -->
+	<!-- 예약한 회원이 여러명일수도 있으니 in( , , ) 으로 한다. -->
+	<update id="updateMailSendCheck" parameterType="HashMap">
+		update tbl_reservation set mailSendCheck = 1
+		where reservationSeq in
+		<foreach collection="arr_reservationSeq" index="i" open="(" separator="," close= ")">		<!-- collection 안에는 배열 또는 list를 넣는다. (주로 배열) close 뒤에 부서번호 값이 하나하나 들어와야 한다 (,가 구분자) -->
+			'${arr_reservationSeq[i]}'		<!-- 부서번호가 '-9999' '10' 이런식으로 들어와야 하기 때문에 '' 를 붙인다. -->
+		</foreach>							<!-- seq 는 숫자로 되어져 있기 때문에 '' 를 안써도 되지만, 문자일때는 반드시!! '' 를 써주어야 한다. (DB 에서 문자인지 숫자인지 잘 파악해야함.) -->
+	</update>
+
+
+	<!-- === 인사관리 페이지에 접속한 페이지URL, 사용자ID, 접속IP주소, 접속시간을 기록으로 DB에 insert 하도록 한다. === -->
+    <insert id="insert_accessTime" parameterType="HashMap">
+       insert into tbl_empManger_accessTime(seqAccessTime, pageUrl, fk_userid, clientIP, accessTime)
+       values(seq_seqAccessTime.nextval, #{pageUrl}, #{fk_userid}, #{clientIp}, #{accessTime})
+    </insert>
+
+	
+</mapper>
